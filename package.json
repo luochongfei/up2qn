@@ -1,0 +1,22 @@
+{
+  "name": "up2qn",
+  "version": "0.0.1",
+  "description": "上传文件到七牛云存储",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.js -o dist/ -m"
+  },
+  "keywords": [
+    "qiniu",
+    "actions",
+    "workflow",
+    "七牛"
+  ],
+  "author": "luochongfei",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.2.6",
+    "glob": "^7.1.6",
+    "qiniu": "^7.3.2"
+  }
+}
