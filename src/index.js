@@ -53,28 +53,36 @@ class Up2Qn {
 
     // 开始处理
     start() {
-        this.files.forEach((file) => {
+        const self = this;
+        const tasks = [];
+        // 生成队列
+        this.files.forEach(file => {
+            const fn = () => {
+                return this.upload(file);
+            };
+            tasks.push(fn);
+        });
 
-            this.upload(file).then(res => {
-                core.info(`${file} 上传成功`);
-            }).catch(err => {
+        // 执行异步队列
+        this.asyncRun(tasks, {
+            callback(res) {
+                core.info(`${res.file} ${res.isOverwrite ? '覆盖' : ''}上传成功`);
+            },
+            errorback(err){
                 if (+err.res.statusCode === 614) {
-                    core.info(`${file} 文件已存在,尝试覆盖上传...`);
-                    // 尝试覆盖上传
-                    this.upload(err.file, true).then(() => {
-                        core.info(`${file} 覆盖上传成功！`);
-                    }).catch(oErr => {
-                        core.error(`${file} 覆盖上传失败，请检查配置后重试！`);
-                        core.error(oErr.resBody);
+                    core.info(`${err.file} 文件已存在并且有变更，稍后尝试覆盖上传...`);
+
+                    // 追加到末尾，待正常文件传完，再执行覆盖上传
+                    tasks.push(() => {
+                        return self.upload(err.file, true);
                     });
                 } else {
-                    core.error(`${file} 上传失败！`);
+                    core.error(`${err.file} 上传失败！`);
                     core.error(err.resBody);
                 }
-            });
+            }
         });
     }
-
 
     /**
      * 上传
@@ -100,13 +108,15 @@ class Up2Qn {
                     resolve({
                         file,
                         resBody,
-                        res
+                        res,
+                        isOverwrite
                     });
                 } else {
                     reject({
                         file,
                         resBody,
-                        res
+                        res,
+                        isOverwrite
                     });
                 }
             });
@@ -132,6 +142,23 @@ class Up2Qn {
         // 如果带有原文件名，则组装成 桶:原文件名 形式 如 bucket:123.jpg
         const scope = overwriteKey ? [this.setting.bucket, overwriteKey].join(':') : this.setting.bucket;
         return  new qiniu.rs.PutPolicy({ scope }).uploadToken(this.mac);
+    }
+
+    // 按顺序执行异步队列
+    asyncRun(list, options = { callback, errorback }) {
+        const next = (index) => {
+            if (+index === list.length) {
+                return;
+            }
+            list[index]().then(res => {
+                options.callback(res);
+            }).catch(err => {
+                options.errorback(err);
+            }).finally(() => {
+                next(++index);
+            })
+        };
+        next(0);
     }
 }
 
